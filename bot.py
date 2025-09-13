@@ -4,12 +4,12 @@ python-telegram-bot==13.15
 redis==3.2.1
 """
 import os
-import logging
+from io import BytesIO
 
 import redis
 import requests
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from telegram.ext import Filters, Updater
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
@@ -35,7 +35,7 @@ def start(update, context):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.message.reply_text(text='Привет!', reply_markup=reply_markup)
+    update.message.reply_text(text='Выберите товар', reply_markup=reply_markup)
     return "HANDLE_MENU"
 
 
@@ -44,11 +44,24 @@ def handle_menu(update, context):
     query.answer()
     callback_data = query.data
 
-    response = requests.get(f'http://localhost:1337/api/products/{callback_data}')
+    response = requests.get(
+        f'http://localhost:1337/api/products/{callback_data}',
+        params={'populate': 'picture'}
+    )
     response.raise_for_status()
     response = response.json()
 
-    query.message.reply_text(response['data']['description'])
+    image_url = response['data']['picture']['formats']['thumbnail']['url']
+    image_response = requests.get(f'http://localhost:1337{image_url}')
+    image_response.raise_for_status()
+    image = BytesIO(image_response.content)
+
+    query.message.delete()
+    query.message.reply_photo(
+        photo=InputFile(image),
+        caption=response['data']['description']
+    )
+
     return 'START'
 
 

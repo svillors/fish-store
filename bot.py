@@ -29,26 +29,27 @@ def start(update, context):
     for product in response.json()['data']:
         keyboard.append(
             [InlineKeyboardButton(
-                product['name'], callback_data=product['id']
+                product['name'], callback_data=product['documentId']
             )]
         )
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     update.message.reply_text(text='Привет!', reply_markup=reply_markup)
-    return "ECHO"
+    return "HANDLE_MENU"
 
 
-def echo(update, context):
-    """
-    Хэндлер для состояния ECHO.
-    
-    Бот отвечает пользователю тем же, что пользователь ему написал.
-    Оставляет пользователя в состоянии ECHO.
-    """
-    users_reply = update.message.text
-    update.message.reply_text(users_reply)
-    return "ECHO"
+def handle_menu(update, context):
+    query = update.callback_query
+    query.answer()
+    callback_data = query.data
+
+    response = requests.get(f'http://localhost:1337/api/products/{callback_data}')
+    response.raise_for_status()
+    response = response.json()
+
+    query.message.reply_text(response['data']['description'])
+    return 'START'
 
 
 def handle_users_reply(update, context):
@@ -80,17 +81,17 @@ def handle_users_reply(update, context):
     
     states_functions = {
         'START': start,
-        'ECHO': echo
+        'HANDLE_MENU': handle_menu
     }
     state_handler = states_functions[user_state]
     # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.
     # Оставляю этот try...except, чтобы код не падал молча.
     # Этот фрагмент можно переписать.
-    try:
-        next_state = state_handler(update, context)
-        db.set(chat_id, next_state)
-    except Exception as err:
-        print(err)
+    # try:
+    next_state = state_handler(update, context)
+    db.set(chat_id, next_state)
+    # except Exception as err:
+    #     print(err)
 
 
 def get_database_connection():

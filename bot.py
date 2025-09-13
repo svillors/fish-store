@@ -13,16 +13,11 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from telegram.ext import Filters, Updater
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
+
 _database = redis.Redis(host='localhost', port=6379, db=0)
 
 
-def start(update, context):
-    """
-    Хэндлер для состояния START.
-    
-    Бот отвечает пользователю фразой "Привет!" и переводит его в состояние ECHO.
-    Теперь в ответ на его команды будет запускаеться хэндлер echo.
-    """
+def send_menu(update):
     response = requests.get('http://localhost:1337/api/products')
     response.raise_for_status()
     keyboard = []
@@ -35,7 +30,13 @@ def start(update, context):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.message.reply_text(text='Выберите товар', reply_markup=reply_markup)
+    message = update.message or update.callback_query.message
+
+    message.reply_text(text='Выберите товар', reply_markup=reply_markup)
+
+
+def start(update, context):
+    send_menu(update)
     return "HANDLE_MENU"
 
 
@@ -56,13 +57,27 @@ def handle_menu(update, context):
     image_response.raise_for_status()
     image = BytesIO(image_response.content)
 
+    markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton('Назад', callback_data='back')]]
+    )
+
     query.message.delete()
     query.message.reply_photo(
         photo=InputFile(image),
-        caption=response['data']['description']
+        caption=response['data']['description'],
+        reply_markup=markup
     )
 
-    return 'START'
+    return 'HANDLE_DESCRIPTION'
+
+
+def handle_description(update, context):
+    query = update.callback_query
+    query.answer()
+    query.message.delete()
+
+    send_menu(update)
+    return 'HANDLE_MENU'
 
 
 def handle_users_reply(update, context):
@@ -91,10 +106,11 @@ def handle_users_reply(update, context):
         user_state = 'START'
     else:
         user_state = db.get(chat_id).decode("utf-8")
-    
+
     states_functions = {
         'START': start,
-        'HANDLE_MENU': handle_menu
+        'HANDLE_MENU': handle_menu,
+        'HANDLE_DESCRIPTION': handle_description
     }
     state_handler = states_functions[user_state]
     # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.

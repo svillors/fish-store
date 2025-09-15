@@ -53,7 +53,16 @@ def handle_menu(update, context):
     image = BytesIO(image_response.content)
 
     markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton('Назад', callback_data='back')]]
+        [
+            [InlineKeyboardButton('5 кг.', callback_data='quantity-5')],
+            [InlineKeyboardButton('10 кг.', callback_data='quantity-10')],
+            [InlineKeyboardButton('15 кг.', callback_data='quantity-15')],
+            [InlineKeyboardButton('Назад', callback_data='back')],
+            [InlineKeyboardButton(
+                'Добавить в корзину',
+                callback_data=f'add-{callback_data}'
+            )],
+        ]
     )
 
     query.message.delete()
@@ -63,16 +72,65 @@ def handle_menu(update, context):
         reply_markup=markup
     )
 
-    return 'HANDLE_DESCRIPTION'
+    return 'HANDLE_PRODUCT'
 
 
-def handle_description(update, context):
+def handle_product(update, context):
     query = update.callback_query
-    query.answer()
-    query.message.delete()
 
-    send_menu(update)
-    return 'HANDLE_MENU'
+    if query.data == 'back':
+        context.user_data.clear()
+        query.message.delete()
+        send_menu(update)
+        return 'HANDLE_MENU'
+
+    elif query.data.startswith('quantity'):
+        context.user_data['quantity'] = query.data.split('-')[1]
+        return 'HANDLE_PRODUCT'
+
+    elif query.data.startswith('add') and context.user_data.get('quantity', None):
+        product_doc_id = query.data.split('-')[1]
+        tg_id = update.effective_user.id
+        quantity = context.user_data.get('quantity')
+
+        params = {'filters[tg_id][$eq]': tg_id}
+        response = requests.get(
+            'http://localhost:1337/api/carts',
+            params=params
+        )
+        response.raise_for_status()
+        response = response.json()
+
+        if response['data']:
+            cart_doc_id = response['data'][0]['documentId']
+
+        else:
+            payload = {'data': {'tg_id': str(tg_id)}}
+            response = requests.post(
+                'http://localhost:1337/api/carts',
+                json=payload
+            )
+            response.raise_for_status()
+            cart_doc_id = response.json()['data']['documentId']
+
+        payload = {'data': {
+            'products': product_doc_id,
+            'cart': cart_doc_id,
+            'quantity': float(quantity)
+        }}
+        response = requests.post(
+            'http://localhost:1337/api/product-items',
+            json=payload
+        )
+        response.raise_for_status()
+
+        context.user_data.clear()
+        query.message.delete()
+        send_menu(update)
+        return 'HANDLE_MENU'
+    else:
+        query.answer('чтобы добвить товар в корзину нужно выбрать количество')
+        return 'HANDLE_PRODUCT'
 
 
 def handle_users_reply(update, context):
@@ -93,7 +151,7 @@ def handle_users_reply(update, context):
     states_functions = {
         'START': start,
         'HANDLE_MENU': handle_menu,
-        'HANDLE_DESCRIPTION': handle_description
+        'HANDLE_PRODUCT': handle_product
     }
     state_handler = states_functions[user_state]
     next_state = state_handler(update, context)

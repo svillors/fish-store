@@ -15,7 +15,7 @@ _database = redis.Redis(host='localhost', port=6379, db=0)
 
 
 def send_menu(update):
-    response = requests.get('http://localhost:1337/api/products')
+    response = requests.get(f'{BASE_URL}/api/products')
     response.raise_for_status()
     keyboard = []
     for product in response.json()['data']:
@@ -40,7 +40,7 @@ def get_or_create_cart(tg_id):
         'filters[tg_id][$eq]': tg_id,
     }
     response = requests.get(
-        'http://localhost:1337/api/carts',
+        f'{BASE_URL}/api/carts',
         params=params
     )
     response.raise_for_status()
@@ -51,7 +51,7 @@ def get_or_create_cart(tg_id):
 
     payload = {'data': {'tg_id': str(tg_id)}}
     response = requests.post(
-        'http://localhost:1337/api/carts',
+        f'{BASE_URL}/api/carts',
         json=payload
     )
     response.raise_for_status()
@@ -93,14 +93,14 @@ def handle_menu(update, context):
         return 'HANDLE_MENU'
 
     response = requests.get(
-        f'http://localhost:1337/api/products/{callback_data}',
+        f'{BASE_URL}/api/products/{callback_data}',
         params={'populate': 'picture'}
     )
     response.raise_for_status()
     response = response.json()
 
     image_url = response['data']['picture']['formats']['thumbnail']['url']
-    image_response = requests.get(f'http://localhost:1337{image_url}')
+    image_response = requests.get(f'{BASE_URL}{image_url}')
     image_response.raise_for_status()
     image = BytesIO(image_response.content)
 
@@ -148,7 +148,7 @@ def handle_product(update, context):
 
         params = {'filters[tg_id][$eq]': tg_id}
         response = requests.get(
-            'http://localhost:1337/api/carts',
+            f'{BASE_URL}/api/carts',
             params=params
         )
         response.raise_for_status()
@@ -162,7 +162,7 @@ def handle_product(update, context):
             'quantity': float(quantity)
         }}
         response = requests.post(
-            'http://localhost:1337/api/product-items',
+            f'{BASE_URL}/api/product-items',
             json=payload
         )
         response.raise_for_status()

@@ -9,6 +9,8 @@ from telegram.ext import Filters, Updater
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 
+load_dotenv()
+BASE_URL = 'http://localhost:1337' or os.getenv('STRAPI_URL')
 _database = redis.Redis(host='localhost', port=6379, db=0)
 
 
@@ -23,11 +25,37 @@ def send_menu(update):
             )]
         )
 
+    keyboard.append(
+        [InlineKeyboardButton('Моя корзина', callback_data='mycart')]
+    )
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     message = update.message or update.callback_query.message
 
     message.reply_text(text='Выберите товар', reply_markup=reply_markup)
+
+
+def get_or_create_cart(tg_id):
+    params = {
+        'filters[tg_id][$eq]': tg_id,
+    }
+    response = requests.get(
+        'http://localhost:1337/api/carts',
+        params=params
+    )
+    response.raise_for_status()
+    response = response.json()
+
+    if response['data']:
+        return response['data'][0]['documentId']
+
+    payload = {'data': {'tg_id': str(tg_id)}}
+    response = requests.post(
+        'http://localhost:1337/api/carts',
+        json=payload
+    )
+    response.raise_for_status()
+    return response.json()['data']['documentId']
 
 
 def start(update, context):
@@ -38,7 +66,31 @@ def start(update, context):
 def handle_menu(update, context):
     query = update.callback_query
     query.answer()
+    query.message.delete()
     callback_data = query.data
+    tg_id = update.effective_user.id
+
+    if callback_data == 'mycart':
+        cart_doc_id = get_or_create_cart(tg_id)
+        params = {
+            'filters[cart][documentId][$eq]': cart_doc_id,
+            'populate': 'products'
+        }
+        response = requests.get(f'{BASE_URL}/api/product-items', params=params)
+        response.raise_for_status()
+        lines = []
+        for item in response.json()['data']:
+            quantity = int(item['quantity'])
+            product = item['products'][0]
+            name = product['name']
+            price = int(product['price'])
+            cost = price * quantity
+            line = f'• {name}: \nКол-во: {quantity} кг.\nОбщ. цена: {cost} р.'
+            lines.append(line)
+
+        text = 'Ваша корзина:\n\n' + '\n\n'.join(lines)
+        query.message.reply_text(text=text)
+        return 'HANDLE_MENU'
 
     response = requests.get(
         f'http://localhost:1337/api/products/{callback_data}',
@@ -54,18 +106,19 @@ def handle_menu(update, context):
 
     markup = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton('5 кг.', callback_data='quantity-5')],
-            [InlineKeyboardButton('10 кг.', callback_data='quantity-10')],
-            [InlineKeyboardButton('15 кг.', callback_data='quantity-15')],
-            [InlineKeyboardButton('Назад', callback_data='back')],
+            [
+                InlineKeyboardButton('5 кг.', callback_data='quantity-5'),
+                InlineKeyboardButton('10 кг.', callback_data='quantity-10'),
+                InlineKeyboardButton('15 кг.', callback_data='quantity-15')
+            ],
             [InlineKeyboardButton(
                 'Добавить в корзину',
                 callback_data=f'add-{callback_data}'
             )],
+            [InlineKeyboardButton('Назад', callback_data='back')]
         ]
     )
 
-    query.message.delete()
     query.message.reply_photo(
         photo=InputFile(image),
         caption=response['data']['description'],
@@ -101,17 +154,7 @@ def handle_product(update, context):
         response.raise_for_status()
         response = response.json()
 
-        if response['data']:
-            cart_doc_id = response['data'][0]['documentId']
-
-        else:
-            payload = {'data': {'tg_id': str(tg_id)}}
-            response = requests.post(
-                'http://localhost:1337/api/carts',
-                json=payload
-            )
-            response.raise_for_status()
-            cart_doc_id = response.json()['data']['documentId']
+        cart_doc_id = get_or_create_cart(tg_id)
 
         payload = {'data': {
             'products': product_doc_id,
@@ -169,7 +212,6 @@ def get_database_connection():
 
 
 if __name__ == '__main__':
-    load_dotenv()
     token = os.getenv("TELEGRAM_TOKEN")
     updater = Updater(token)
     dispatcher = updater.dispatcher

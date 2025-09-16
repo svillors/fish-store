@@ -38,14 +38,14 @@ def send_menu(update):
 def fetch_product_items(cart_doc_id):
     params = {
         'filters[cart][documentId][$eq]': cart_doc_id,
-        'populate': 'products'
+        'populate': 'product'
     }
     response = requests.get(f'{BASE_URL}/api/product-items', params=params)
     response.raise_for_status()
     lines = []
     for item in response.json()['data']:
         quantity = int(item['quantity'])
-        product = item['products'][0]
+        product = item['product']
         name = product['name']
         price = int(product['price'])
         cost = price * quantity
@@ -161,7 +161,7 @@ def handle_product(update, context):
         cart_doc_id = get_or_create_cart(tg_id)
 
         payload = {'data': {
-            'products': product_doc_id,
+            'product': product_doc_id,
             'cart': cart_doc_id,
             'quantity': float(quantity)
         }}

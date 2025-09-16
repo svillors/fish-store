@@ -99,6 +99,29 @@ def get_or_create_cart(tg_id):
     return response.json()['data']['documentId']
 
 
+def get_or_create_user_profile(tg_id):
+    params = {
+        'filters[tg_id][$eq]': tg_id,
+    }
+    response = requests.get(
+        f'{BASE_URL}/api/user-profiles',
+        params=params
+    )
+    response.raise_for_status()
+    response = response.json()
+
+    if response['data']:
+        return response['data'][0]['documentId']
+
+    payload = {'data': {'tg_id': str(tg_id)}}
+    response = requests.post(
+        f'{BASE_URL}/api/user-profiles',
+        json=payload
+    )
+    response.raise_for_status()
+    return response.json()['data']['documentId']
+
+
 def start(update, context):
     send_menu(update)
     return "HANDLE_MENU"
@@ -253,7 +276,14 @@ def handle_cart(update, context):
 
 def waiting_email(update, context):
     text = update.message.text
-    print(text)
+    tg_id = update.effective_user.id
+    doc_id = get_or_create_user_profile(tg_id)
+    payload = {'data': {'email': text}}
+    response = requests.put(
+        f'{BASE_URL}/api/user-profiles/{doc_id}',
+        json=payload
+    )
+    response.raise_for_status()
     send_menu(update)
     return 'HANDLE_MENU'
 

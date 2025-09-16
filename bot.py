@@ -21,7 +21,8 @@ def send_menu(update):
     for product in response.json()['data']:
         keyboard.append(
             [InlineKeyboardButton(
-                product['name'], callback_data=product['documentId']
+                product['name'],
+                callback_data=f'prod-{product["documentId"]}'
             )]
         )
 
@@ -42,17 +43,37 @@ def fetch_product_items(cart_doc_id):
     }
     response = requests.get(f'{BASE_URL}/api/product-items', params=params)
     response.raise_for_status()
+    response = response.json()
+    if not response.get('data', None):
+        return
     lines = []
-    for item in response.json()['data']:
+    product_items = []
+    for item in response['data']:
         quantity = int(item['quantity'])
         product = item['product']
         name = product['name']
+        product_items.append((item['documentId'], name))
         price = int(product['price'])
         cost = price * quantity
         line = f'• {name}: \nКол-во: {quantity} кг.\nОбщ. цена: {cost} р.'
         lines.append(line)
 
-    return 'Ваша корзина:\n\n' + '\n\n'.join(lines)
+    return (lines, product_items)
+
+
+def create_cart_view(lines, product_items):
+    keyboard = []
+    for item in product_items:
+        doc_id, name = item
+        keyboard.append(
+            [InlineKeyboardButton(
+                f'Убрать товар: {name}', callback_data=f'del-{doc_id}'
+            )]
+        )
+    keyboard.append([InlineKeyboardButton('Оплата', callback_data='buy')])
+    keyboard.append([InlineKeyboardButton('Назад', callback_data='back')])
+    keyboard_markup = InlineKeyboardMarkup(keyboard)
+    return ('Ваша Корзина:\n\n' + '\n\n'.join(lines), keyboard_markup)
 
 
 def get_or_create_cart(tg_id):
@@ -92,44 +113,57 @@ def handle_menu(update, context):
 
     if callback_data == 'mycart':
         cart_doc_id = get_or_create_cart(tg_id)
-        text = fetch_product_items(cart_doc_id)
-        query.message.reply_text(text=text)
-        return 'HANDLE_MENU'
+        raw_items = fetch_product_items(cart_doc_id)
 
-    response = requests.get(
-        f'{BASE_URL}/api/products/{callback_data}',
-        params={'populate': 'picture'}
-    )
-    response.raise_for_status()
-    response = response.json()
+        if not raw_items:
+            text = 'Ваша корзина пуста'
+            markup = InlineKeyboardMarkup(
+                [[InlineKeyboardButton('Назад', callback_data='back')]])
+            query.message.reply_text(text=text, reply_markup=markup)
+            return 'HANDLE_CART'
 
-    image_url = response['data']['picture']['formats']['thumbnail']['url']
-    image_response = requests.get(f'{BASE_URL}{image_url}')
-    image_response.raise_for_status()
-    image = BytesIO(image_response.content)
+        lines, product_items = raw_items
+        text, markup = create_cart_view(lines, product_items)
+        query.message.reply_text(text=text, reply_markup=markup)
+        return 'HANDLE_CART'
 
-    markup = InlineKeyboardMarkup(
-        [
+    elif callback_data.startswith('prod'):
+        product_id = callback_data.split('-')[1]
+        response = requests.get(
+            f'{BASE_URL}/api/products/{product_id}',
+            params={'populate': 'picture'}
+        )
+        response.raise_for_status()
+        response = response.json()
+
+        image_url = response['data']['picture']['formats']['thumbnail']['url']
+        image_response = requests.get(f'{BASE_URL}{image_url}')
+        image_response.raise_for_status()
+        image = BytesIO(image_response.content)
+
+        markup = InlineKeyboardMarkup(
             [
-                InlineKeyboardButton('5 кг.', callback_data='quantity-5'),
-                InlineKeyboardButton('10 кг.', callback_data='quantity-10'),
-                InlineKeyboardButton('15 кг.', callback_data='quantity-15')
-            ],
-            [InlineKeyboardButton(
-                'Добавить в корзину',
-                callback_data=f'add-{callback_data}'
-            )],
-            [InlineKeyboardButton('Назад', callback_data='back')]
-        ]
-    )
+                [
+                    InlineKeyboardButton('5 кг.', callback_data='quantity-5'),
+                    InlineKeyboardButton('10 кг.', callback_data='quantity-10'),
+                    InlineKeyboardButton('15 кг.', callback_data='quantity-15')
+                ],
+                [InlineKeyboardButton(
+                    'Добавить в корзину',
+                    callback_data=f'add-{product_id}'
+                )],
+                [InlineKeyboardButton('Назад', callback_data='back')]
+            ]
+        )
 
-    query.message.reply_photo(
-        photo=InputFile(image),
-        caption=response['data']['description'],
-        reply_markup=markup
-    )
+        query.message.reply_photo(
+            photo=InputFile(image),
+            caption=response['data']['description'],
+            reply_markup=markup
+        )
 
-    return 'HANDLE_PRODUCT'
+        return 'HANDLE_PRODUCT'
+    return 'HANDLE_MENU'
 
 
 def handle_product(update, context):
@@ -180,6 +214,39 @@ def handle_product(update, context):
         return 'HANDLE_PRODUCT'
 
 
+def handle_cart(update, context):
+    query = update.callback_query
+    query.answer()
+    query.message.delete()
+    callback_data = query.data
+    tg_id = update.effective_user.id
+
+    if callback_data == "back":
+        send_menu(update)
+        return 'HANDLE_MENU'
+
+    elif callback_data.startswith('del'):
+        prod_item_doc_id = callback_data.split('-')[1]
+        response = requests.delete(
+            f'{BASE_URL}/api/product-items/{prod_item_doc_id}')
+        response.raise_for_status()
+        cart_doc_id = get_or_create_cart(tg_id)
+        raw_items = fetch_product_items(cart_doc_id)
+
+        if not raw_items:
+            text = 'Ваша корзина пуста'
+            markup = InlineKeyboardMarkup(
+                [[InlineKeyboardButton('Назад', callback_data='back')]])
+            query.message.reply_text(text=text, reply_markup=markup)
+            return 'HANDLE_CART'
+
+        lines, product_items = raw_items
+        text, markup = create_cart_view(lines, product_items)
+        query.message.reply_text(text=text, reply_markup=markup)
+
+        return 'HANDLE_CART'
+
+
 def handle_users_reply(update, context):
     db = get_database_connection()
     if update.message:
@@ -198,7 +265,8 @@ def handle_users_reply(update, context):
     states_functions = {
         'START': start,
         'HANDLE_MENU': handle_menu,
-        'HANDLE_PRODUCT': handle_product
+        'HANDLE_PRODUCT': handle_product,
+        'HANDLE_CART': handle_cart
     }
     state_handler = states_functions[user_state]
     next_state = state_handler(update, context)

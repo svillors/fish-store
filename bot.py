@@ -246,6 +246,17 @@ def handle_cart(update, context):
 
         return 'HANDLE_CART'
 
+    elif callback_data == 'buy':
+        query.message.reply_text(text='Напишите вашу почту')
+        return 'WAITING_EMAIL'
+
+
+def waiting_email(update, context):
+    text = update.message.text
+    print(text)
+    send_menu(update)
+    return 'HANDLE_MENU'
+
 
 def handle_users_reply(update, context):
     db = get_database_connection()
@@ -266,7 +277,8 @@ def handle_users_reply(update, context):
         'START': start,
         'HANDLE_MENU': handle_menu,
         'HANDLE_PRODUCT': handle_product,
-        'HANDLE_CART': handle_cart
+        'HANDLE_CART': handle_cart,
+        'WAITING_EMAIL': waiting_email
     }
     state_handler = states_functions[user_state]
     next_state = state_handler(update, context)

@@ -35,6 +35,26 @@ def send_menu(update):
     message.reply_text(text='Выберите товар', reply_markup=reply_markup)
 
 
+def fetch_product_items(cart_doc_id):
+    params = {
+        'filters[cart][documentId][$eq]': cart_doc_id,
+        'populate': 'products'
+    }
+    response = requests.get(f'{BASE_URL}/api/product-items', params=params)
+    response.raise_for_status()
+    lines = []
+    for item in response.json()['data']:
+        quantity = int(item['quantity'])
+        product = item['products'][0]
+        name = product['name']
+        price = int(product['price'])
+        cost = price * quantity
+        line = f'• {name}: \nКол-во: {quantity} кг.\nОбщ. цена: {cost} р.'
+        lines.append(line)
+
+    return 'Ваша корзина:\n\n' + '\n\n'.join(lines)
+
+
 def get_or_create_cart(tg_id):
     params = {
         'filters[tg_id][$eq]': tg_id,
@@ -72,23 +92,7 @@ def handle_menu(update, context):
 
     if callback_data == 'mycart':
         cart_doc_id = get_or_create_cart(tg_id)
-        params = {
-            'filters[cart][documentId][$eq]': cart_doc_id,
-            'populate': 'products'
-        }
-        response = requests.get(f'{BASE_URL}/api/product-items', params=params)
-        response.raise_for_status()
-        lines = []
-        for item in response.json()['data']:
-            quantity = int(item['quantity'])
-            product = item['products'][0]
-            name = product['name']
-            price = int(product['price'])
-            cost = price * quantity
-            line = f'• {name}: \nКол-во: {quantity} кг.\nОбщ. цена: {cost} р.'
-            lines.append(line)
-
-        text = 'Ваша корзина:\n\n' + '\n\n'.join(lines)
+        text = fetch_product_items(cart_doc_id)
         query.message.reply_text(text=text)
         return 'HANDLE_MENU'
 

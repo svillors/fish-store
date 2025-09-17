@@ -184,7 +184,6 @@ def waiting_email(update, context):
 
 
 def handle_users_reply(update, context):
-    db = get_database_connection()
     if update.message:
         user_reply = update.message.text
         chat_id = update.message.chat_id
@@ -224,6 +223,7 @@ if __name__ == '__main__':
     load_dotenv()
     link = os.getenv("STRAPI_URL", 'http://localhost:1337')
     token = os.environ["TELEGRAM_TOKEN"]
+    db = get_database_connection()
     updater = Updater(token)
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CallbackQueryHandler(handle_users_reply))

@@ -1,16 +1,9 @@
-import os
-
 import requests
-from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-load_dotenv()
-BASE_URL = 'http://localhost:1337' or os.getenv('STRAPI_URL')
-
-
-def send_menu(update):
-    response = requests.get(f'{BASE_URL}/api/products')
+def send_menu(update, link):
+    response = requests.get(f'{link}/api/products')
     response.raise_for_status()
     keyboard = []
     for product in response.json()['data']:
@@ -31,12 +24,12 @@ def send_menu(update):
     message.reply_text(text='Выберите товар', reply_markup=reply_markup)
 
 
-def fetch_product_items(cart_doc_id):
+def fetch_product_items(cart_doc_id, link):
     params = {
         'filters[cart][documentId][$eq]': cart_doc_id,
         'populate': 'product'
     }
-    response = requests.get(f'{BASE_URL}/api/product-items', params=params)
+    response = requests.get(f'{link}/api/product-items', params=params)
     response.raise_for_status()
     response = response.json()
     if not response.get('data', None):
@@ -71,12 +64,12 @@ def create_cart_view(lines, product_items):
     return ('Ваша Корзина:\n\n' + '\n\n'.join(lines), keyboard_markup)
 
 
-def get_or_create_cart(tg_id):
+def get_or_create_cart(tg_id, link):
     params = {
         'filters[tg_id][$eq]': tg_id,
     }
     response = requests.get(
-        f'{BASE_URL}/api/carts',
+        f'{link}/api/carts',
         params=params
     )
     response.raise_for_status()
@@ -87,19 +80,19 @@ def get_or_create_cart(tg_id):
 
     payload = {'data': {'tg_id': str(tg_id)}}
     response = requests.post(
-        f'{BASE_URL}/api/carts',
+        f'{link}/api/carts',
         json=payload
     )
     response.raise_for_status()
     return response.json()['data']['documentId']
 
 
-def get_or_create_user_profile(tg_id):
+def get_or_create_user_profile(tg_id, link):
     params = {
         'filters[tg_id][$eq]': tg_id,
     }
     response = requests.get(
-        f'{BASE_URL}/api/user-profiles',
+        f'{link}/api/user-profiles',
         params=params
     )
     response.raise_for_status()
@@ -110,7 +103,7 @@ def get_or_create_user_profile(tg_id):
 
     payload = {'data': {'tg_id': str(tg_id)}}
     response = requests.post(
-        f'{BASE_URL}/api/user-profiles',
+        f'{link}/api/user-profiles',
         json=payload
     )
     response.raise_for_status()

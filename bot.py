@@ -10,7 +10,7 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 from utils import (
     create_cart_view, get_or_create_cart, get_or_create_user_profile,
-    fetch_product_items, send_menu, BASE_URL
+    fetch_product_items, send_menu
 )
 
 
@@ -18,7 +18,7 @@ _database = redis.Redis(host='localhost', port=6379, db=0)
 
 
 def start(update, context):
-    send_menu(update)
+    send_menu(update, link)
     return "HANDLE_MENU"
 
 
@@ -30,8 +30,8 @@ def handle_menu(update, context):
     tg_id = update.effective_user.id
 
     if callback_data == 'mycart':
-        cart_doc_id = get_or_create_cart(tg_id)
-        raw_items = fetch_product_items(cart_doc_id)
+        cart_doc_id = get_or_create_cart(tg_id, link)
+        raw_items = fetch_product_items(cart_doc_id, link)
 
         if not raw_items:
             text = 'Ваша корзина пуста'
@@ -48,14 +48,14 @@ def handle_menu(update, context):
     elif callback_data.startswith('prod'):
         product_id = callback_data.split('-')[1]
         response = requests.get(
-            f'{BASE_URL}/api/products/{product_id}',
+            f'{link}/api/products/{product_id}',
             params={'populate': 'picture'}
         )
         response.raise_for_status()
         response = response.json()
 
         image_url = response['data']['picture']['formats']['thumbnail']['url']
-        image_response = requests.get(f'{BASE_URL}{image_url}')
+        image_response = requests.get(f'{link}{image_url}')
         image_response.raise_for_status()
         image = BytesIO(image_response.content)
 
@@ -90,7 +90,7 @@ def handle_product(update, context):
     if query.data == 'back':
         context.user_data.clear()
         query.message.delete()
-        send_menu(update)
+        send_menu(update, link)
         return 'HANDLE_MENU'
 
     elif query.data.startswith('quantity'):
@@ -104,13 +104,13 @@ def handle_product(update, context):
 
         params = {'filters[tg_id][$eq]': tg_id}
         response = requests.get(
-            f'{BASE_URL}/api/carts',
+            f'{link}/api/carts',
             params=params
         )
         response.raise_for_status()
         response = response.json()
 
-        cart_doc_id = get_or_create_cart(tg_id)
+        cart_doc_id = get_or_create_cart(tg_id, link)
 
         payload = {'data': {
             'product': product_doc_id,
@@ -118,14 +118,14 @@ def handle_product(update, context):
             'quantity': float(quantity)
         }}
         response = requests.post(
-            f'{BASE_URL}/api/product-items',
+            f'{link}/api/product-items',
             json=payload
         )
         response.raise_for_status()
 
         context.user_data.clear()
         query.message.delete()
-        send_menu(update)
+        send_menu(update, link)
         return 'HANDLE_MENU'
     else:
         query.answer('чтобы добвить товар в корзину нужно выбрать количество')
@@ -140,16 +140,16 @@ def handle_cart(update, context):
     tg_id = update.effective_user.id
 
     if callback_data == "back":
-        send_menu(update)
+        send_menu(update, link)
         return 'HANDLE_MENU'
 
     elif callback_data.startswith('del'):
         prod_item_doc_id = callback_data.split('-')[1]
         response = requests.delete(
-            f'{BASE_URL}/api/product-items/{prod_item_doc_id}')
+            f'{link}/api/product-items/{prod_item_doc_id}')
         response.raise_for_status()
-        cart_doc_id = get_or_create_cart(tg_id)
-        raw_items = fetch_product_items(cart_doc_id)
+        cart_doc_id = get_or_create_cart(tg_id, link)
+        raw_items = fetch_product_items(cart_doc_id, link)
 
         if not raw_items:
             text = 'Ваша корзина пуста'
@@ -172,10 +172,10 @@ def handle_cart(update, context):
 def waiting_email(update, context):
     text = update.message.text
     tg_id = update.effective_user.id
-    doc_id = get_or_create_user_profile(tg_id)
+    doc_id = get_or_create_user_profile(tg_id, link)
     payload = {'data': {'email': text}}
     response = requests.put(
-        f'{BASE_URL}/api/user-profiles/{doc_id}',
+        f'{link}/api/user-profiles/{doc_id}',
         json=payload
     )
     response.raise_for_status()
@@ -222,7 +222,8 @@ def get_database_connection():
 
 if __name__ == '__main__':
     load_dotenv()
-    token = os.getenv("TELEGRAM_TOKEN")
+    link = os.getenv("STRAPI_URL", 'http://localhost:1337')
+    token = os.environ["TELEGRAM_TOKEN"]
     updater = Updater(token)
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CallbackQueryHandler(handle_users_reply))

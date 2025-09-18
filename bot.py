@@ -184,6 +184,7 @@ def waiting_email(update, context):
 
 
 def handle_users_reply(update, context):
+    db = context.bot_data.get('db')
     if update.message:
         user_reply = update.message.text
         chat_id = update.message.chat_id
@@ -226,6 +227,7 @@ if __name__ == '__main__':
     db = get_database_connection()
     updater = Updater(token)
     dispatcher = updater.dispatcher
+    dispatcher.bot_data['db'] = db
     dispatcher.add_handler(CallbackQueryHandler(handle_users_reply))
     dispatcher.add_handler(MessageHandler(Filters.text, handle_users_reply))
     dispatcher.add_handler(CommandHandler('start', handle_users_reply))

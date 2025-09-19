@@ -9,7 +9,7 @@ from telegram.ext import Filters, Updater
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 from utils import (
-    create_cart_view, get_or_create_cart, get_or_create_user_profile,
+    create_cart_view, ensure_cart_for_user, ensure_user_profile,
     fetch_product_items, send_menu
 )
 
@@ -30,7 +30,7 @@ def handle_menu(update, context):
     tg_id = update.effective_user.id
 
     if callback_data == 'mycart':
-        cart_doc_id = get_or_create_cart(tg_id, link)
+        cart_doc_id = ensure_cart_for_user(tg_id, link)
         raw_items = fetch_product_items(cart_doc_id, link)
 
         if not raw_items:
@@ -110,7 +110,7 @@ def handle_product(update, context):
         response.raise_for_status()
         response = response.json()
 
-        cart_doc_id = get_or_create_cart(tg_id, link)
+        cart_doc_id = ensure_cart_for_user(tg_id, link)
 
         payload = {'data': {
             'product': product_doc_id,
@@ -148,7 +148,7 @@ def handle_cart(update, context):
         response = requests.delete(
             f'{link}/api/product-items/{prod_item_doc_id}')
         response.raise_for_status()
-        cart_doc_id = get_or_create_cart(tg_id, link)
+        cart_doc_id = ensure_cart_for_user(tg_id, link)
         raw_items = fetch_product_items(cart_doc_id, link)
 
         if not raw_items:
@@ -172,7 +172,7 @@ def handle_cart(update, context):
 def waiting_email(update, context):
     text = update.message.text
     tg_id = update.effective_user.id
-    doc_id = get_or_create_user_profile(tg_id, link)
+    doc_id = ensure_user_profile(tg_id, link)
     payload = {'data': {'email': text}}
     response = requests.put(
         f'{link}/api/user-profiles/{doc_id}',

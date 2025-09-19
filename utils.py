@@ -64,52 +64,6 @@ def create_cart_view(lines, product_items):
     return ('Ваша Корзина:\n\n' + '\n\n'.join(lines), keyboard_markup)
 
 
-def get_or_create_cart(tg_id, link):
-    params = {
-        'filters[tg_id][$eq]': tg_id,
-    }
-    response = requests.get(
-        f'{link}/api/carts',
-        params=params
-    )
-    response.raise_for_status()
-    response = response.json()
-
-    if response['data']:
-        return response['data'][0]['documentId']
-
-    payload = {'data': {'tg_id': str(tg_id)}}
-    response = requests.post(
-        f'{link}/api/carts',
-        json=payload
-    )
-    response.raise_for_status()
-    return response.json()['data']['documentId']
-
-
-def get_or_create_user_profile(tg_id, link):
-    params = {
-        'filters[tg_id][$eq]': tg_id,
-    }
-    response = requests.get(
-        f'{link}/api/user-profiles',
-        params=params
-    )
-    response.raise_for_status()
-    response = response.json()
-
-    if response['data']:
-        return response['data'][0]['documentId']
-
-    payload = {'data': {'tg_id': str(tg_id)}}
-    response = requests.post(
-        f'{link}/api/user-profiles',
-        json=payload
-    )
-    response.raise_for_status()
-    return response.json()['data']['documentId']
-
-
 def get_user_profile_by_tg_id(tg_id, link):
     params = {
         'filters[tg_id][$eq]': str(tg_id)

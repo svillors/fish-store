@@ -108,3 +108,69 @@ def get_or_create_user_profile(tg_id, link):
     )
     response.raise_for_status()
     return response.json()['data']['documentId']
+
+
+def get_user_profile_by_tg_id(tg_id, link):
+    params = {
+        'filters[tg_id][$eq]': str(tg_id)
+    }
+    response = requests.get(f'{link}/api/user-profiles', params=params)
+    response.raise_for_status()
+    data = response.json().get('data') or []
+    return data[0] if data else None
+
+
+def create_user_profile(tg_id, link, email=None):
+    payload = {'data': {'tg_id': str(tg_id)}}
+    if email is not None:
+        payload['data']['email'] = email
+    response = requests.post(f'{link}/api/user-profiles', json=payload)
+    try:
+        response.raise_for_status()
+        return response.json()['data']
+    except requests.HTTPError:
+        if response.status_code == 400:
+            existing = get_user_profile_by_tg_id(tg_id)
+            if existing:
+                return existing
+        raise
+
+
+def ensure_user_profile(tg_id):
+    found = get_user_profile_by_tg_id(tg_id)
+    if found:
+        return found['documentId']
+    created = create_user_profile(tg_id)
+    return created['documentId']
+
+
+def get_cart_by_tg_id(tg_id, link):
+    params = {
+        'filters[tg_id][$eq]': str(tg_id)
+    }
+    resposne = requests.get(f'{link}/api/carts', params=params)
+    resposne.raise_for_status()
+    data = resposne.json().get('data') or []
+    return data[0] if data else None
+
+
+def create_cart_for_user(tg_id, link):
+    payload = {'data': {'tg_id': str(tg_id)}}
+    response = requests.post(f'{link}/api/carts', json=payload)
+    try:
+        response.raise_for_status()
+        return response.json()['data']
+    except requests.HTTPError:
+        if response.status_code == 400:
+            existing = get_cart_by_tg_id(tg_id, link)
+            if existing:
+                return existing
+        raise
+
+
+def ensure_cart_for_user(tg_id, link):
+    found = get_cart_by_tg_id(tg_id, link)
+    if found:
+        return found['documentId']
+    created = create_cart_for_user(tg_id, link)
+    return created['documentId']

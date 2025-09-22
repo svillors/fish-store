@@ -9,8 +9,9 @@ from telegram.ext import Filters, Updater
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 from utils import (
-    create_cart_view, ensure_cart_for_user, ensure_user_profile,
-    fetch_product_items, send_menu
+    create_cart_view, get_cart_by_tg_id, create_cart_for_user,
+    fetch_product_items, send_menu, get_user_profile_by_tg_id,
+    create_user_profile
 )
 
 
@@ -30,7 +31,12 @@ def handle_menu(update, context):
     tg_id = update.effective_user.id
 
     if callback_data == 'mycart':
-        cart_doc_id = ensure_cart_for_user(tg_id, link)
+        found = get_cart_by_tg_id(tg_id, link)
+        cart_doc_id = (
+            found['documentId']
+            if found
+            else create_cart_for_user(tg_id, link)['documentId']
+        )
         raw_items = fetch_product_items(cart_doc_id, link)
 
         if not raw_items:
@@ -110,7 +116,12 @@ def handle_product(update, context):
         response.raise_for_status()
         response = response.json()
 
-        cart_doc_id = ensure_cart_for_user(tg_id, link)
+        found = get_cart_by_tg_id(tg_id, link)
+        cart_doc_id = (
+            found['documentId']
+            if found
+            else create_cart_for_user(tg_id, link)['documentId']
+        )
 
         payload = {'data': {
             'product': product_doc_id,
@@ -148,7 +159,12 @@ def handle_cart(update, context):
         response = requests.delete(
             f'{link}/api/product-items/{prod_item_doc_id}')
         response.raise_for_status()
-        cart_doc_id = ensure_cart_for_user(tg_id, link)
+        found = get_cart_by_tg_id(tg_id, link)
+        cart_doc_id = (
+            found['documentId']
+            if found
+            else create_cart_for_user(tg_id, link)['documentId']
+        )
         raw_items = fetch_product_items(cart_doc_id, link)
 
         if not raw_items:
@@ -172,7 +188,12 @@ def handle_cart(update, context):
 def waiting_email(update, context):
     text = update.message.text
     tg_id = update.effective_user.id
-    doc_id = ensure_user_profile(tg_id, link)
+    found = get_user_profile_by_tg_id(tg_id, link)
+    doc_id = (
+        found['documentId']
+        if found
+        else create_user_profile(tg_id, link)['documentId']
+    )
     payload = {'data': {'email': text}}
     response = requests.put(
         f'{link}/api/user-profiles/{doc_id}',

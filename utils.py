@@ -90,14 +90,6 @@ def create_user_profile(tg_id, link, email=None):
         raise
 
 
-def ensure_user_profile(tg_id):
-    found = get_user_profile_by_tg_id(tg_id)
-    if found:
-        return found['documentId']
-    created = create_user_profile(tg_id)
-    return created['documentId']
-
-
 def get_cart_by_tg_id(tg_id, link):
     params = {
         'filters[tg_id][$eq]': str(tg_id)
@@ -120,11 +112,3 @@ def create_cart_for_user(tg_id, link):
             if existing:
                 return existing
         raise
-
-
-def ensure_cart_for_user(tg_id, link):
-    found = get_cart_by_tg_id(tg_id, link)
-    if found:
-        return found['documentId']
-    created = create_cart_for_user(tg_id, link)
-    return created['documentId']
